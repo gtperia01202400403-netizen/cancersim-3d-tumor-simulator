@@ -1,0 +1,2325 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CancerSim — 3D/4D Interactive Cancer Cell Growth & Tumor Progression Simulator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Chart.js for Real-Time Scientific Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            lab: {
+              bg: '#050811',
+              panel: 'rgba(10, 16, 32, 0.78)',
+              border: 'rgba(56, 189, 248, 0.16)',
+              accent: '#38bdf8',
+              crimson: '#ff2a55',
+              emerald: '#10b981',
+              amber: '#f59e0b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #050811;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+      margin: 0;
+      padding: 0;
+    }
+    /* Custom Glassmorphic Scientific Panels */
+    .glass-panel {
+      background: rgba(9, 14, 28, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(56, 189, 248, 0.18);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .glass-panel-subtle {
+      background: rgba(13, 21, 40, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    /* Custom Range Sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.9);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      border: 2px solid #050811;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+      transition: transform 0.12s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.18);
+    }
+    input[type="range"].slider-crimson::-webkit-slider-thumb {
+      background: #ff2a55;
+      box-shadow: 0 0 8px rgba(255, 42, 85, 0.7);
+    }
+    input[type="range"].slider-amber::-webkit-slider-thumb {
+      background: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+    }
+    input[type="range"].slider-emerald::-webkit-slider-thumb {
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(5, 8, 17, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.25);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.45);
+    }
+    /* Subtle Scanline Overlay on Viewport */
+    .microscopy-vignette {
+      background: radial-gradient(circle at center, transparent 58%, rgba(3, 6, 14, 0.72) 100%);
+      pointer-events: none;
+    }
+    #three-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      outline: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#050811] text-slate-200 selection:bg-sky-500/30">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="sticky top-0 z-40 glass-panel border-b border-sky-500/20 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+    <!-- Brand & Academic Identifier -->
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500/25 via-sky-500/20 to-emerald-500/25 border border-rose-500/40 flex items-center justify-center shadow-lg shadow-rose-500/10">
+        <!-- SVG Cell Cluster Icon -->
+        <svg class="w-5 h-5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="4.5" fill="rgba(255,42,85,0.28)" />
+          <circle cx="17.5" cy="7.5" r="2.5" stroke="#38bdf8" />
+          <circle cx="6.5" cy="16.5" r="2.8" stroke="#10b981" />
+          <circle cx="7" cy="7.5" r="2" stroke="#f59e0b" />
+          <path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke-linecap="round" opacity="0.5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">
+            Cancer<span class="text-rose-500">Sim</span>
+            <span class="text-xs font-mono font-normal text-sky-400 ml-1">v4.2 3D/4D</span>
+          </h1>
+          <span id="sim-status-badge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+            <span id="sim-status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="sim-status-text">RUNNING</span>
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400 hidden sm:block">3D/4D Agent-Based Tumor Progression &amp; Reaction-Diffusion Virtual Laboratory</p>
+      </div>
+    </div>
+
+    <!-- Navigation View Switcher -->
+    <nav class="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800/90 overflow-x-auto max-w-full">
+      <button data-tab="lab" class="nav-tab active px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 whitespace-nowrap">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        3D Laboratory
+      </button>
+      <button data-tab="analytics" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1.5 whitespace-nowrap">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3"/></svg>
+        Real-Time Analytics
+      </button>
+      <button data-tab="experiments" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1.5 whitespace-nowrap">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L4.5 18A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-3L14 9.5V3"/></svg>
+        Experiment Lab
+      </button>
+      <button data-tab="docs" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1.5 whitespace-nowrap">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Math Model &amp; Docs
+      </button>
+    </nav>
+
+    <!-- Educational Simulation Pill -->
+    <div class="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300">
+      <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>BSCS Academic Computational Model — Non-Clinical</span>
+    </div>
+  </header>
+
+  <!-- TOAST / MESSAGE NOTIFICATION -->
+  <div id="toast-banner" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-2">
+    <div class="glass-panel px-4 py-2 rounded-xl border border-sky-400/40 text-xs font-mono text-sky-200 shadow-2xl flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+      <span id="toast-text">Notification</span>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 1: 3D LABORATORY WORKSTATION (MAIN SCREEN)                       -->
+  <!-- ===================================================================== -->
+  <main id="view-lab" class="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
+
+    <!-- LEFT PANEL: ENVIRONMENTAL MANIPULATION & SCENARIOS -->
+    <aside class="w-full lg:w-80 xl:w-[330px] shrink-0 glass-panel border-r border-sky-500/15 p-3.5 overflow-y-auto lg:h-[calc(100vh-57px)] z-20 flex flex-col gap-3.5">
+
+      <!-- Scenario Presets -->
+      <section class="glass-panel-subtle rounded-xl p-3">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+            Scenario Presets
+          </h2>
+          <span class="text-[10px] font-mono text-slate-400">INIT / APPLY</span>
+        </div>
+        <select id="scenario-select" class="w-full bg-slate-950/90 border border-slate-700/80 rounded-lg px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+          <option value="baseline">1. Baseline Tumor Progression (Normoxic)</option>
+          <option value="hyperglycemia">2. High Glucose Supply (Hyperglycemia)</option>
+          <option value="hypoxic">3. Hypoxic Microenvironment (Low O₂)</option>
+          <option value="high_stress">4. High Environmental / Oxidative Stress</option>
+          <option value="cytotoxic">5. Cytotoxic Targeted Therapy Protocol</option>
+        </select>
+        <p id="scenario-desc" class="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+          Standard physiological perfusion ($C_{\text{gluc}}=0.75$, $C_{\text{O2}}=0.80$) with 6 initial malignant seed cells in healthy stromal tissue.
+        </p>
+      </section>
+
+      <!-- Spatial Micro-Pipette / Local Substance Injection -->
+      <section class="glass-panel-subtle rounded-xl p-3 border border-amber-500/20">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 2l4 4M7.5 20.5L19 9l-4-4L3.5 16.5 2 22l5.5-1.5z"/></svg>
+            Spatial Micro-Pipette Injection
+          </h2>
+          <span class="text-[10px] font-mono text-amber-400/80">3D PDE BOLUS</span>
+        </div>
+
+        <div class="space-y-2.5">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Target 3D Coordinates in Tissue</label>
+            <select id="inject-location" class="w-full bg-slate-950/90 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-400">
+              <option value="center">Tumor Core Center (0, 0, 0)</option>
+              <option value="periphery">Invasive Tumor Rim (+6, +4, +3)</option>
+              <option value="vascular">Random Vascular Capillary Source</option>
+              <option value="selected">Selected Cell Coordinates (if active)</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[11px] mb-1">
+              <span class="text-slate-400">Bolus Dose / Concentration</span>
+              <span id="bolus-val" class="font-mono text-amber-300">+0.45 mM</span>
+            </div>
+            <input id="bolus-slider" type="range" min="0.1" max="1.0" step="0.05" value="0.45" class="w-full slider-amber">
+          </div>
+
+          <div class="grid grid-cols-3 gap-1.5 pt-1">
+            <button id="btn-inject-nutrient" class="px-2 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-medium transition-all flex flex-col items-center gap-0.5">
+              <span>+ Glucose</span>
+              <span class="text-[9px] text-amber-400/70 font-mono">Nutrient</span>
+            </button>
+            <button id="btn-inject-stress" class="px-2 py-2 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-300 text-[11px] font-medium transition-all flex flex-col items-center gap-0.5">
+              <span>+ Stress</span>
+              <span class="text-[9px] text-purple-400/70 font-mono">ROS/Acid</span>
+            </button>
+            <button id="btn-inject-drug" class="px-2 py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 text-[11px] font-medium transition-all flex flex-col items-center gap-0.5">
+              <span>+ Agent</span>
+              <span class="text-[9px] text-rose-400/70 font-mono">Therapy</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Global Microenvironment Boundary Parameters -->
+      <section class="glass-panel-subtle rounded-xl p-3 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-sky-300">Boundary Perfusion Controls</h2>
+          <span class="text-[10px] font-mono text-slate-400">REAL-TIME</span>
+        </div>
+
+        <!-- Vascular Nutrient Supply -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span class="text-amber-300 font-medium">Glucose / Nutrient Supply</span>
+            <span id="param-nutrient-val" class="font-mono text-amber-200">0.75</span>
+          </div>
+          <input id="param-nutrient" type="range" min="0.10" max="1.00" step="0.05" value="0.75" class="w-full slider-amber">
+        </div>
+
+        <!-- Ambient Oxygen Tension -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span class="text-sky-300 font-medium">Oxygen Tension (pO₂)</span>
+            <span id="param-oxygen-val" class="font-mono text-sky-200">0.80</span>
+          </div>
+          <input id="param-oxygen" type="range" min="0.10" max="1.00" step="0.05" value="0.80" class="w-full">
+        </div>
+
+        <!-- Environmental Stress -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span class="text-purple-300 font-medium">Environmental Stress</span>
+            <span id="param-stress-val" class="font-mono text-purple-200">0.10</span>
+          </div>
+          <input id="param-stress" type="range" min="0.00" max="1.00" step="0.05" value="0.10" class="w-full">
+        </div>
+
+        <!-- Cytotoxic Treatment Agent -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span class="text-rose-400 font-medium">Treatment Agent Dose</span>
+            <span id="param-drug-val" class="font-mono text-rose-300">0.00</span>
+          </div>
+          <input id="param-drug" type="range" min="0.00" max="1.00" step="0.05" value="0.00" class="w-full slider-crimson">
+        </div>
+      </section>
+
+      <!-- Visual Legend -->
+      <section class="glass-panel-subtle rounded-xl p-3">
+        <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">3D Optical Microscopy Legend</h3>
+        <div class="grid grid-cols-2 gap-2 text-[11px]">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]"></span>
+            <span class="text-slate-300">Healthy Cell</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_10px_#ff2a55]"></span>
+            <span class="text-slate-300">Cancer Cell</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-violet-900 border border-violet-400/50"></span>
+            <span class="text-slate-300">Necrotic / Dead</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_#f59e0b]"></span>
+            <span class="text-slate-300">Glucose Molecule</span>
+          </div>
+          <div class="flex items-center gap-2 col-span-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_6px_#38bdf8]"></span>
+            <span class="text-slate-300">Dissolved O₂ Particle</span>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- CENTER 3D VIEWPORT + FLOATING VISUALIZATION MODES + BOTTOM TIMELINE -->
+    <section class="flex-1 relative min-h-[540px] lg:h-[calc(100vh-57px)] bg-[#04070f] overflow-hidden select-none">
+      <!-- Three.js Canvas Container -->
+      <div id="three-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+      <div class="absolute inset-0 microscopy-vignette"></div>
+
+      <!-- TOP-LEFT OVERLAY: 6 VISUALIZATION MODES SELECTOR -->
+      <div class="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div class="glass-panel rounded-xl p-1.5 flex flex-wrap items-center gap-1 pointer-events-auto">
+          <button data-vismode="cellular" class="vis-btn active px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-sky-500/25 text-sky-200 border border-sky-400/40 transition-all">
+            1. Cellular View
+          </button>
+          <button data-vismode="tumor" class="vis-btn px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800/70 transition-all">
+            2. Tumor Growth
+          </button>
+          <button data-vismode="nutrient" class="vis-btn px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800/70 transition-all">
+            3. Nutrient Field
+          </button>
+          <button data-vismode="oxygen" class="vis-btn px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800/70 transition-all">
+            4. Oxygen Field
+          </button>
+          <button data-vismode="effects" class="vis-btn px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800/70 transition-all">
+            5. Env. Effects
+          </button>
+          <button data-vismode="cross_section" class="vis-btn px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-300 hover:bg-slate-800/70 transition-all">
+            6. Cross-Section
+          </button>
+        </div>
+
+        <!-- Camera Focus Preset & Hint -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+          <button id="btn-focus-tumor" class="glass-panel hover:border-rose-400/50 px-3 py-1.5 rounded-xl text-[11px] font-medium text-rose-300 flex items-center gap-1.5 transition-all">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 12h3m12 0h3M12 3v3m0 12v3"/></svg>
+            Focus Tumor Core
+          </button>
+          <button id="btn-reset-camera" class="glass-panel hover:border-sky-400/50 px-2.5 py-1.5 rounded-xl text-[11px] text-slate-300 transition-all" title="Reset Camera Angle">
+            Reset Cam
+          </button>
+        </div>
+      </div>
+
+      <!-- CONDITIONAL CROSS-SECTION SLIDER OVERLAY (MODE 6) -->
+      <div id="cross-section-bar" class="hidden absolute top-16 left-3 z-10 glass-panel rounded-xl px-3.5 py-2.5 border border-rose-500/35 w-72">
+        <div class="flex justify-between items-center text-[11px] mb-1">
+          <span class="text-rose-300 font-semibold flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 12h16M12 4v16"/></svg>
+            Z-Axis Slicing Plane
+          </span>
+          <span id="slice-z-val" class="font-mono text-rose-200">Z &le; +0.0 &mu;m</span>
+        </div>
+        <input id="slice-z-slider" type="range" min="-15" max="15" step="0.5" value="0" class="w-full slider-crimson">
+        <p class="text-[10px] text-slate-400 mt-1">Slices anterior tissue to expose hypoxic/necrotic core.</p>
+      </div>
+
+      <!-- MODE INFO BADGE -->
+      <div class="absolute bottom-24 left-3 z-10 pointer-events-none hidden sm:block">
+        <div class="glass-panel px-3 py-1.5 rounded-lg text-[11px] font-mono text-slate-300 flex items-center gap-2">
+          <span class="text-sky-400">MODE:</span>
+          <span id="active-mode-label">Cellular View — Click any cell to inspect telemetry</span>
+        </div>
+      </div>
+
+      <!-- BOTTOM FLOATING 4D TIME CONTROL BAR -->
+      <div class="absolute bottom-3 left-3 right-3 z-20 glass-panel rounded-2xl p-3 border border-sky-500/25 shadow-2xl">
+        <div class="flex flex-col md:flex-row items-center gap-3">
+          <!-- Transport Controls -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button id="btn-play-pause" class="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-sky-500/25">
+              <svg id="icon-pause" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+              <svg id="icon-play" class="w-3.5 h-3.5 hidden" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span id="btn-play-text">Pause</span>
+            </button>
+
+            <button id="btn-step" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono transition-all" title="Advance 1 Discrete Time Step (1 Hour)">
+              +1h Step
+            </button>
+
+            <button id="btn-reset" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/70 border border-slate-700 hover:border-rose-500/40 text-slate-300 hover:text-rose-200 text-xs transition-all" title="Reset Simulation to Day 0">
+              Reset
+            </button>
+          </div>
+
+          <!-- 4D Timeline Scrubber -->
+          <div class="flex-1 w-full flex flex-col gap-1">
+            <div class="flex justify-between items-center text-[11px] font-mono">
+              <span class="text-sky-300 font-semibold" id="sim-clock-display">Week 0 · Day 0 · 00:00 (t = 0h)</span>
+              <span class="text-slate-400" id="timeline-range-label">4D History: 0 / 0 hrs</span>
+            </div>
+            <input id="timeline-scrubber" type="range" min="0" max="0" value="0" class="w-full">
+          </div>
+
+          <!-- Speed Selector -->
+          <div class="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 shrink-0">
+            <span class="text-[10px] font-mono text-slate-400 px-1.5">SPEED</span>
+            <button data-speed="1" class="speed-btn px-2 py-1 rounded-lg text-[11px] font-mono text-slate-400 hover:text-white">1x</button>
+            <button data-speed="4" class="speed-btn active px-2 py-1 rounded-lg text-[11px] font-mono bg-sky-500/25 text-sky-300 border border-sky-500/40">4x</button>
+            <button data-speed="12" class="speed-btn px-2 py-1 rounded-lg text-[11px] font-mono text-slate-400 hover:text-white">12x</button>
+            <button data-speed="30" class="speed-btn px-2 py-1 rounded-lg text-[11px] font-mono text-slate-400 hover:text-white">30x</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: INTERACTIVE CELL INSPECTOR & LIVE TELEMETRY -->
+    <aside class="w-full lg:w-80 xl:w-[340px] shrink-0 glass-panel border-l border-sky-500/15 p-3.5 overflow-y-auto lg:h-[calc(100vh-57px)] z-20 flex flex-col gap-3.5">
+
+      <!-- Live Tissue Population & Tumor Metrics -->
+      <section class="glass-panel-subtle rounded-xl p-3">
+        <div class="flex items-center justify-between mb-2.5">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-sky-300">Live Tissue Telemetry</h2>
+          <span class="text-[10px] font-mono text-emerald-400">REAL-TIME</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 mb-2.5">
+          <div class="bg-slate-950/80 border border-rose-500/25 rounded-lg p-2 text-center">
+            <div class="text-[10px] text-rose-300/80 uppercase">Cancer</div>
+            <div id="stat-cancer" class="text-base font-bold font-mono text-rose-400">6</div>
+          </div>
+          <div class="bg-slate-950/80 border border-emerald-500/25 rounded-lg p-2 text-center">
+            <div class="text-[10px] text-emerald-300/80 uppercase">Healthy</div>
+            <div id="stat-healthy" class="text-base font-bold font-mono text-emerald-400">140</div>
+          </div>
+          <div class="bg-slate-950/80 border border-violet-500/25 rounded-lg p-2 text-center">
+            <div class="text-[10px] text-violet-300/80 uppercase">Dead</div>
+            <div id="stat-dead" class="text-base font-bold font-mono text-violet-300">0</div>
+          </div>
+        </div>
+
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between py-1 border-b border-slate-800/80">
+            <span class="text-slate-400">Est. Tumor Volume</span>
+            <span id="stat-volume" class="font-mono text-rose-300 font-medium">0.025 mm³</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/80">
+            <span class="text-slate-400">Tumor Occupancy</span>
+            <span id="stat-occupancy" class="font-mono text-slate-200">4.1%</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/80">
+            <span class="text-slate-400">Proliferation Rate (dN/dt)</span>
+            <span id="stat-growth-rate" class="font-mono text-emerald-300">+0.00 cells/h</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/80">
+            <span class="text-slate-400">Mean Glucose / O₂</span>
+            <span id="stat-env-means" class="font-mono text-amber-300">0.75 / 0.80</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive Cell Inspector (Raycasting Target) -->
+      <section class="glass-panel-subtle rounded-xl p-3 border border-sky-500/25 flex-1 flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Interactive Cell Inspector
+          </h2>
+          <button id="btn-select-random-cancer" class="text-[10px] font-mono text-rose-300 hover:underline">Target Tumor Cell</button>
+        </div>
+
+        <!-- Empty State -->
+        <div id="inspector-empty" class="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-700/70 rounded-xl bg-slate-950/40">
+          <div class="w-10 h-10 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center mb-2 text-sky-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M15 15l6 6M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14z"/></svg>
+          </div>
+          <p class="text-xs font-medium text-slate-300">No Cell Locked</p>
+          <p class="text-[11px] text-slate-400 mt-1">Click any 3D cell in the viewport to inspect its stochastic state variables, local microenvironment, and division probability.</p>
+        </div>
+
+        <!-- Active Cell Data -->
+        <div id="inspector-active" class="hidden space-y-2.5 text-xs">
+          <div class="flex items-center justify-between bg-slate-950/90 p-2.5 rounded-lg border border-slate-800">
+            <div>
+              <div class="text-[10px] font-mono text-slate-400">CELL IDENTIFIER</div>
+              <div id="insp-id" class="font-mono font-bold text-sm text-white">CELL-0042</div>
+            </div>
+            <span id="insp-type-badge" class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+              CANCER CELL
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 font-mono text-[11px]">
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/80">
+              <span class="text-slate-400 block text-[10px]">3D POSITION (x,y,z)</span>
+              <span id="insp-pos" class="text-slate-200">1.2, -0.4, 2.1</span>
+            </div>
+            <div class="bg-slate-950/70 p-2 rounded-lg border border-slate-800/80">
+              <span class="text-slate-400 block text-[10px]">AGE / DIVISIONS</span>
+              <span id="insp-age" class="text-slate-200">34h · 2 div</span>
+            </div>
+          </div>
+
+          <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-400">Physiological Status</span>
+              <span id="insp-status" class="font-mono font-semibold text-emerald-300">PROLIFERATING</span>
+            </div>
+
+            <!-- Local Glucose Exposure -->
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span class="text-amber-300">Local Glucose Exposure</span>
+                <span id="insp-nutrient" class="font-mono text-amber-200">0.74 mM</span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div id="insp-nutrient-bar" class="h-full bg-amber-400 transition-all" style="width: 74%"></div>
+              </div>
+            </div>
+
+            <!-- Local Oxygen Exposure -->
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span class="text-sky-300">Local Oxygen Exposure</span>
+                <span id="insp-oxygen" class="font-mono text-sky-200">0.68 pO₂</span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div id="insp-oxygen-bar" class="h-full bg-sky-400 transition-all" style="width: 68%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stochastic Transition Probabilities -->
+          <div class="bg-slate-950/80 p-2.5 rounded-lg border border-sky-500/20 space-y-1.5 font-mono text-[11px]">
+            <div class="text-[10px] text-sky-400 uppercase tracking-wider mb-1">Stochastic Step Probabilities (Δt=1h)</div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Division Prob (P_div):</span>
+              <span id="insp-pdiv" class="text-emerald-400 font-semibold">4.82%</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Death Prob (P_death):</span>
+              <span id="insp-pdeath" class="text-rose-400 font-semibold">0.21%</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Metabolic ATP Energy:</span>
+              <span id="insp-energy" class="text-amber-300">84%</span>
+            </div>
+          </div>
+
+          <p id="insp-mechanistic-note" class="text-[11px] text-slate-400 italic leading-relaxed">
+            High local glucose and loss of contact inhibition sustain elevated mitotic division probability.
+          </p>
+        </div>
+      </section>
+
+      <!-- Quick Save Run to Experiment Lab -->
+      <button id="btn-quick-save-run" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-sky-500/20 to-indigo-500/20 hover:from-sky-500/30 hover:to-indigo-500/30 border border-sky-400/40 text-sky-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+        <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Snapshot Run to Experiment Lab
+      </button>
+    </aside>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 2: REAL-TIME ANALYTICS DASHBOARD                                 -->
+  <!-- ===================================================================== -->
+  <section id="view-analytics" class="hidden flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-bold text-white">Real-Time Simulation Analytics</h2>
+        <p class="text-xs text-slate-400">Live time-series telemetry streamed directly from the 3D Agent-Based &amp; PDE Reaction-Diffusion Engine.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-export-csv-analytics" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Time-Series CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="glass-panel rounded-2xl p-4">
+        <div class="text-xs text-slate-400">Cancer Cell Population</div>
+        <div id="kpi-cancer" class="text-2xl font-bold font-mono text-rose-400 mt-1">6</div>
+        <div id="kpi-cancer-sub" class="text-[11px] text-rose-300/70 mt-1 font-mono">Doubling time tracking</div>
+      </div>
+      <div class="glass-panel rounded-2xl p-4">
+        <div class="text-xs text-slate-400">Healthy Stromal Cells</div>
+        <div id="kpi-healthy" class="text-2xl font-bold font-mono text-emerald-400 mt-1">140</div>
+        <div class="text-[11px] text-emerald-300/70 mt-1 font-mono">Contact-inhibited homeostasis</div>
+      </div>
+      <div class="glass-panel rounded-2xl p-4">
+        <div class="text-xs text-slate-400">Estimated Tumor Volume</div>
+        <div id="kpi-volume" class="text-2xl font-bold font-mono text-sky-400 mt-1">0.025 mm³</div>
+        <div id="kpi-occupancy" class="text-[11px] text-sky-300/70 mt-1 font-mono">4.1% tissue occupancy</div>
+      </div>
+      <div class="glass-panel rounded-2xl p-4">
+        <div class="text-xs text-slate-400">Cumulative Necrotic / Dead</div>
+        <div id="kpi-dead" class="text-2xl font-bold font-mono text-violet-300 mt-1">0</div>
+        <div id="kpi-env" class="text-[11px] text-amber-300/80 mt-1 font-mono">Mean Gluc: 0.75 | O₂: 0.80</div>
+      </div>
+    </div>
+
+    <!-- 4 Real-Time Scientific Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="glass-panel rounded-2xl p-4">
+        <h3 class="text-sm font-semibold text-white mb-1">1. Cellular Population Dynamics Over Time</h3>
+        <p class="text-[11px] text-slate-400 mb-3">Cancer vs. Healthy vs. Dead cell counts across simulated hours.</p>
+        <div class="h-64">
+          <canvas id="chart-populations"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-panel rounded-2xl p-4">
+        <h3 class="text-sm font-semibold text-white mb-1">2. Estimated Tumor Volume (mm³) &amp; Spheroid Growth</h3>
+        <p class="text-[11px] text-slate-400 mb-3">Volumetric expansion exhibiting exponential-to-Gompertzian saturation as core hypoxia rises.</p>
+        <div class="h-64">
+          <canvas id="chart-volume"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-panel rounded-2xl p-4">
+        <h3 class="text-sm font-semibold text-white mb-1">3. Microenvironment Nutrient &amp; Oxygen Depletion</h3>
+        <p class="text-[11px] text-slate-400 mb-3">Domain-averaged Glucose and O₂ concentrations governed by Michaelis-Menten consumption.</p>
+        <div class="h-64">
+          <canvas id="chart-environment"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-panel rounded-2xl p-4">
+        <h3 class="text-sm font-semibold text-white mb-1">4. Instantaneous Net Proliferation Rate (cells/hr)</h3>
+        <p class="text-[11px] text-slate-400 mb-3">Net mitotic division events minus hypoxic/cytotoxic cell death per time step.</p>
+        <div class="h-64">
+          <canvas id="chart-growthrate"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 3: EXPERIMENT LABORATORY & SCENARIO COMPARISON                   -->
+  <!-- ===================================================================== -->
+  <section id="view-experiments" class="hidden flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-bold text-white">Experiment Laboratory &amp; Comparative Modeling</h2>
+        <p class="text-xs text-slate-400">Record simulation runs under different microenvironmental conditions, compare tumor growth trajectories side-by-side, and export datasets.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="experiment-name-input" type="text" placeholder="Run label (e.g., Hypoxic Core Test)" class="bg-slate-950/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-400 w-56">
+        <button id="btn-save-experiment" class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition-all">
+          + Save Current Run
+        </button>
+      </div>
+    </div>
+
+    <!-- Side-by-Side Run Comparison -->
+    <div class="glass-panel rounded-2xl p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-sm font-semibold text-sky-300">Side-by-Side Scenario Trajectory Comparison</h3>
+        <div class="flex flex-wrap items-center gap-3 text-xs">
+          <div class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+            <span class="text-slate-400">Run A:</span>
+            <select id="compare-run-a" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200"></select>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+            <span class="text-slate-400">Run B:</span>
+            <select id="compare-run-b" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 h-64 bg-slate-950/50 rounded-xl p-3 border border-slate-800/80">
+          <canvas id="chart-comparison"></canvas>
+        </div>
+        <div id="comparison-metrics-box" class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80 flex flex-col justify-between text-xs space-y-3">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Saved Experiments Table -->
+    <div class="glass-panel rounded-2xl p-5">
+      <h3 class="text-sm font-semibold text-white mb-3">Saved Simulation Experiment Registry</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400 font-mono text-[11px]">
+              <th class="py-2.5 px-3">EXPERIMENT NAME</th>
+              <th class="py-2.5 px-3">DURATION</th>
+              <th class="py-2.5 px-3">PARAMETERS (GLUC / O₂ / STRESS / DRUG)</th>
+              <th class="py-2.5 px-3">FINAL CANCER</th>
+              <th class="py-2.5 px-3">FINAL HEALTHY</th>
+              <th class="py-2.5 px-3">TUMOR VOL</th>
+              <th class="py-2.5 px-3 text-right">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="experiments-table-body" class="divide-y divide-slate-800/60">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 4: MATHEMATICAL MODEL & ACADEMIC DOCUMENTATION                   -->
+  <!-- ===================================================================== -->
+  <section id="view-docs" class="hidden flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
+    <div class="glass-panel rounded-2xl p-6 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-4">
+        <div>
+          <span class="text-[11px] font-mono text-sky-400 uppercase tracking-widest">BSCS Simulation &amp; Modeling — Technical Specification</span>
+          <h2 class="text-2xl font-bold text-white mt-1">Hybrid 3D Agent-Based &amp; PDE Reaction-Diffusion Tumor Model</h2>
+        </div>
+        <span class="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">Educational Model Only</span>
+      </div>
+
+      <p class="text-sm text-slate-300 leading-relaxed">
+        <strong>CancerSim</strong> implements a multiscale, discrete-time ($\Delta t = 1\text{ hour}$) hybrid computational biology model decoupling a <strong>3D continuous spatial voxel grid</strong> ($12 \times 12 \times 12$ nodes across $[-15, 15]^3$ spatial units) from an <strong>Agent-Based Model (ABM)</strong> of individual eukaryotic cells. This architecture captures emergent tumor spheroid phenomena including avascular growth saturation, peripheral proliferation rims, and central hypoxic/necrotic cores.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+        <div class="glass-panel-subtle rounded-xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-amber-300">1. 3D Reaction-Diffusion Microenvironment</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Diffusible species $C_s(\mathbf{x}, t)$ for Glucose ($s=G$), Oxygen ($s=O_2$), Stress ($s=S$), and Cytotoxic Drug ($s=D$) evolve via explicit 3D finite-difference Laplacian diffusion with Dirichlet boundary vascular perfusion:
+          </p>
+          <div class="bg-slate-950 p-2.5 rounded-lg font-mono text-[11px] text-sky-300 border border-slate-800">
+            ∂C_s/∂t = D_s ∇²C_s − Σ U_{i,s}(C_s) + S_boundary
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Cellular metabolic uptake follows saturating <strong>Michaelis-Menten kinetics</strong>: $U = V_{\max} \frac{C}{K_m + C}$, where cancer cells exhibit a $2.6\times$ Warburg glycolytic uptake multiplier.
+          </p>
+        </div>
+
+        <div class="glass-panel-subtle rounded-xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-rose-400">2. Stochastic Mitotic Proliferation</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            At each discrete time step $\Delta t$, viable cells evaluate mitotic division probability $P_{\text{div}}$ governed by local nutrient/oxygen sufficiency, cell cycle maturity ($A_i \ge A_{\min}$), and local neighbor crowding $N_{\text{nbr}}$:
+          </p>
+          <div class="bg-slate-950 p-2.5 rounded-lg font-mono text-[11px] text-emerald-300 border border-slate-800">
+            P_div = k_base · M(G, O₂) · (1 − N_nbr / N_max)
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Healthy cells enforce strict contact inhibition ($N_{\max} = 6$), whereas malignant cells have mutated contact inhibition ($N_{\max} = 18$), driving multilayered 3D tumor clustering.
+          </p>
+        </div>
+
+        <div class="glass-panel-subtle rounded-xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-violet-300">3. Hypoxic Necrosis &amp; Cytotoxic Apoptosis</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Cells transition to a <code>DEAD</code> state stochastically when local $O_2$ or Glucose drops below critical metabolic thresholds (ischemic necrosis) or in response to environmental stress and therapeutic agents:
+          </p>
+          <div class="bg-slate-950 p-2.5 rounded-lg font-mono text-[11px] text-rose-300 border border-slate-800">
+            P_death = p_0 + α_hyp·H(O₂) + α_str·S + α_drug·D
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Because rapidly dividing cancer rims consume oxygen before it diffuses inward, the tumor interior naturally develops a realistic necrotic core.
+          </p>
+        </div>
+
+        <div class="glass-panel-subtle rounded-xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-sky-300">4. Biomechanical Repulsion &amp; Motility</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Cells interact via short-range elastic steric repulsion when center-to-center distance $d_{ij} &lt; 2R_{\text{cell}}$, preventing non-physical overlap while pushing daughter cells outward during mitosis, combined with weak chemotactic drift along glucose gradients.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200/90 leading-relaxed">
+        <strong>Academic &amp; Clinical Scope Disclaimer:</strong> CancerSim is constructed exclusively as an educational computational modeling platform for demonstrating Agent-Based Modeling, 3D PDE reaction-diffusion numerical methods, stochastic state machines, and sensitivity analysis. Simplified dimensionless parameters are used; it does not represent a patient-specific clinical prognosis or medical diagnostic tool.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- JAVASCRIPT: DECOUPLED SIMULATION ENGINE, 3D RENDERER & ANALYTICS      -->
+  <!-- ===================================================================== -->
+  <script>
+    /**
+     * =========================================================================
+     * MODULE 1: DECOUPLED 3D/4D COMPUTATIONAL BIOLOGY SIMULATION ENGINE
+     * =========================================================================
+     * Independent of Three.js rendering. Models a [-15, 15]^3 tissue domain with
+     * a 12x12x12 3D PDE finite-difference voxel grid and an Agent-Based Model.
+     */
+    class CancerSimulationEngine {
+      constructor() {
+        this.domainHalf = 15.0; // [-15, 15] units
+        this.gridSize = 12;     // 12x12x12 spatial voxels
+        this.totalVoxels = this.gridSize ** 3;
+        this.cellRadius = 0.72;
+        this.maxCells = 1200;
+
+        // Global boundary perfusion parameters
+        this.params = {
+          nutrientSupply: 0.75,
+          oxygenSupply: 0.80,
+          environmentalStress: 0.10,
+          treatmentDose: 0.00,
+        };
+
+        // 3D Voxel Fields (Float32Arrays for high-speed numerical updates)
+        this.nutrientField = new Float32Array(this.totalVoxels);
+        this.oxygenField = new Float32Array(this.totalVoxels);
+        this.stressField = new Float32Array(this.totalVoxels);
+        this.drugField = new Float32Array(this.totalVoxels);
+        this.tempField = new Float32Array(this.totalVoxels);
+
+        // Agent State & History
+        this.cells = [];
+        this.nextCellId = 1;
+        this.timeHours = 0;
+        this.history = [];       // Time-series metrics for charts & CSV
+        this.snapshots = [];     // 4D spatial snapshots for timeline scrubbing
+        this.maxSnapshots = 160;
+        this.lastNetGrowthRate = 0;
+
+        this.reset('baseline');
+      }
+
+      reset(scenario = 'baseline') {
+        this.timeHours = 0;
+        this.cells = [];
+        this.nextCellId = 1;
+        this.history = [];
+        this.snapshots = [];
+        this.lastNetGrowthRate = 0;
+
+        // Apply scenario presets
+        if (scenario === 'baseline') {
+          this.params = { nutrientSupply: 0.75, oxygenSupply: 0.80, environmentalStress: 0.10, treatmentDose: 0.00 };
+        } else if (scenario === 'hyperglycemia') {
+          this.params = { nutrientSupply: 0.98, oxygenSupply: 0.82, environmentalStress: 0.08, treatmentDose: 0.00 };
+        } else if (scenario === 'hypoxic') {
+          this.params = { nutrientSupply: 0.65, oxygenSupply: 0.32, environmentalStress: 0.22, treatmentDose: 0.00 };
+        } else if (scenario === 'high_stress') {
+          this.params = { nutrientSupply: 0.65, oxygenSupply: 0.65, environmentalStress: 0.58, treatmentDose: 0.00 };
+        } else if (scenario === 'cytotoxic') {
+          this.params = { nutrientSupply: 0.75, oxygenSupply: 0.80, environmentalStress: 0.15, treatmentDose: 0.62 };
+        }
+
+        // Initialize 3D PDE voxel concentrations
+        for (let i = 0; i < this.totalVoxels; i++) {
+          this.nutrientField[i] = this.params.nutrientSupply;
+          this.oxygenField[i] = this.params.oxygenSupply;
+          this.stressField[i] = this.params.environmentalStress;
+          this.drugField[i] = this.params.treatmentDose;
+        }
+
+        // Seed Healthy Stromal Tissue surrounding the central region
+        const initialHealthyCount = 135;
+        for (let i = 0; i < initialHealthyCount; i++) {
+          let x, y, z, r;
+          do {
+            x = (Math.random() * 2 - 1) * 12.2;
+            y = (Math.random() * 2 - 1) * 12.2;
+            z = (Math.random() * 2 - 1) * 12.2;
+            r = Math.hypot(x, y, z);
+          } while (r < 2.6 || r > 13.5);
+
+          this.cells.push(this.createCell('healthy', x, y, z, Math.floor(Math.random() * 36)));
+        }
+
+        // Seed Initial Malignant Cancer Cluster near core (0,0,0)
+        const initialCancerCoords = [
+          [0.0, 0.0, 0.0],
+          [1.1, 0.4, -0.3],
+          [-0.9, 0.7, 0.5],
+          [0.3, -1.0, 0.6],
+          [-0.5, -0.6, -0.9],
+          [0.8, -0.3, 0.9]
+        ];
+        for (const [cx, cy, cz] of initialCancerCoords) {
+          this.cells.push(this.createCell('cancer', cx, cy, cz, 12 + Math.floor(Math.random() * 10)));
+        }
+
+        this.recordMetricsAndSnapshot();
+      }
+
+      createCell(type, x, y, z, age = 0) {
+        return {
+          id: this.nextCellId++,
+          type, // 'healthy' | 'cancer' | 'dead'
+          x, y, z,
+          vx: 0, vy: 0, vz: 0,
+          age,
+          divisions: 0,
+          energy: type === 'cancer' ? 0.85 : 0.75,
+          localNutrient: this.params.nutrientSupply,
+          localOxygen: this.params.oxygenSupply,
+          pDiv: 0,
+          pDeath: 0,
+          status: 'QUIESCENT',
+          deadTimer: 0
+        };
+      }
+
+      // Map 3D continuous coordinates [-15, 15] -> Voxel index [0..11]
+      coordToVoxelIndex(x, y, z) {
+        const normX = Math.min(0.999, Math.max(0, (x + this.domainHalf) / (2 * this.domainHalf)));
+        const normY = Math.min(0.999, Math.max(0, (y + this.domainHalf) / (2 * this.domainHalf)));
+        const normZ = Math.min(0.999, Math.max(0, (z + this.domainHalf) / (2 * this.domainHalf)));
+        const ix = Math.floor(normX * this.gridSize);
+        const iy = Math.floor(normY * this.gridSize);
+        const iz = Math.floor(normZ * this.gridSize);
+        return ix + iy * this.gridSize + iz * this.gridSize * this.gridSize;
+      }
+
+      // Spatial Micro-Pipette Bolus Injection into 3D Voxel Grid
+      injectSubstance(substanceType, targetCoords, amount) {
+        const [tx, ty, tz] = targetCoords;
+        const N = this.gridSize;
+        const step = (2 * this.domainHalf) / N;
+
+        for (let iz = 0; iz < N; iz++) {
+          const vz = -this.domainHalf + (iz + 0.5) * step;
+          for (let iy = 0; iy < N; iy++) {
+            const vy = -this.domainHalf + (iy + 0.5) * step;
+            for (let ix = 0; ix < N; ix++) {
+              const vx = -this.domainHalf + (ix + 0.5) * step;
+              const distSq = (vx - tx) ** 2 + (vy - ty) ** 2 + (vz - tz) ** 2;
+              // Gaussian spatial bolus spread (sigma ~ 4.2 units)
+              const weight = Math.exp(-distSq / 28.0);
+              if (weight > 0.02) {
+                const idx = ix + iy * N + iz * N * N;
+                if (substanceType === 'nutrient') {
+                  this.nutrientField[idx] = Math.min(1.5, this.nutrientField[idx] + amount * weight);
+                } else if (substanceType === 'stress') {
+                  this.stressField[idx] = Math.min(1.5, this.stressField[idx] + amount * weight);
+                } else if (substanceType === 'drug') {
+                  this.drugField[idx] = Math.min(1.5, this.drugField[idx] + amount * weight);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Solve 1 step of 3D Finite-Difference Laplacian Diffusion + Boundary Perfusion
+      diffuseField(field, boundaryTarget, diffCoeff = 0.14) {
+        const N = this.gridSize;
+        const N2 = N * N;
+        this.tempField.set(field);
+
+        for (let z = 0; z < N; z++) {
+          for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+              const idx = x + y * N + z * N2;
+              // Boundary nodes perfused by surrounding capillary vasculature
+              if (x === 0 || x === N - 1 || y === 0 || y === N - 1 || z === 0 || z === N - 1) {
+                field[idx] = this.tempField[idx] * 0.65 + boundaryTarget * 0.35;
+                continue;
+              }
+              const sumNeighbors =
+                this.tempField[idx - 1] + this.tempField[idx + 1] +
+                this.tempField[idx - N] + this.tempField[idx + N] +
+                this.tempField[idx - N2] + this.tempField[idx + N2];
+              const laplacian = sumNeighbors - 6.0 * this.tempField[idx];
+              field[idx] = Math.max(0, Math.min(1.5, this.tempField[idx] + diffCoeff * laplacian));
+            }
+          }
+        }
+      }
+
+      // Advance Simulation by 1 Discrete Time Step (dt = 1 Hour)
+      step() {
+        this.timeHours += 1;
+
+        // 1. 3D PDE Diffusion for Nutrients, Oxygen, Stress, and Treatment Agent
+        this.diffuseField(this.nutrientField, this.params.nutrientSupply, 0.15);
+        this.diffuseField(this.oxygenField, this.params.oxygenSupply, 0.18);
+        this.diffuseField(this.stressField, this.params.environmentalStress, 0.10);
+        this.diffuseField(this.drugField, this.params.treatmentDose, 0.12);
+
+        // Drug decay/clearance over time
+        for (let i = 0; i < this.totalVoxels; i++) {
+          this.drugField[i] *= 0.965;
+        }
+
+        // 2. Spatial Neighbor Counting & Steric Biomechanical Repulsion
+        const count = this.cells.length;
+        const neighborCounts = new Int16Array(count);
+        const minDist = this.cellRadius * 1.92;
+        const minDistSq = minDist * minDist;
+        const senseRadiusSq = (this.cellRadius * 3.1) ** 2;
+
+        for (let i = 0; i < count; i++) {
+          const ci = this.cells[i];
+          if (ci.type === 'dead') continue;
+
+          for (let j = i + 1; j < count; j++) {
+            const cj = this.cells[j];
+            if (cj.type === 'dead') continue;
+
+            const dx = ci.x - cj.x;
+            const dy = ci.y - cj.y;
+            const dz = ci.z - cj.z;
+            const dSq = dx * dx + dy * dy + dz * dz;
+
+            if (dSq < senseRadiusSq) {
+              neighborCounts[i]++;
+              neighborCounts[j]++;
+            }
+
+            if (dSq < minDistSq && dSq > 0.0001) {
+              const d = Math.sqrt(dSq);
+              const overlap = (minDist - d) * 0.24;
+              const nx = dx / d;
+              const ny = dy / d;
+              const nz = dz / d;
+              ci.vx += nx * overlap;
+              ci.vy += ny * overlap;
+              ci.vz += nz * overlap;
+              cj.vx -= nx * overlap;
+              cj.vy -= ny * overlap;
+              cj.vz -= nz * overlap;
+            }
+          }
+        }
+
+        // 3. Agent Metabolic Uptake, Stochastic State Transitions & Proliferation
+        const newCells = [];
+        let divisionsThisStep = 0;
+        let deathsThisStep = 0;
+
+        for (let i = 0; i < count; i++) {
+          const cell = this.cells[i];
+          cell.age += 1;
+
+          // Dead / necrotic cell clearance dynamics
+          if (cell.type === 'dead') {
+            cell.deadTimer += 1;
+            cell.pDiv = 0;
+            cell.pDeath = 0;
+            cell.status = 'NECROTIC / LYSED';
+            // Gradual phagocytic clearance after 28 hours
+            if (cell.deadTimer < 28) {
+              newCells.push(cell);
+            }
+            continue;
+          }
+
+          const vIdx = this.coordToVoxelIndex(cell.x, cell.y, cell.z);
+          const localG = this.nutrientField[vIdx];
+          const localO2 = this.oxygenField[vIdx];
+          const localStress = this.stressField[vIdx];
+          const localDrug = this.drugField[vIdx];
+
+          cell.localNutrient = localG;
+          cell.localOxygen = localO2;
+
+          // Michaelis-Menten Metabolic Consumption
+          const isCancer = cell.type === 'cancer';
+          const km = 0.22;
+          const vMaxG = isCancer ? 0.022 : 0.008;
+          const vMaxO2 = isCancer ? 0.020 : 0.009;
+
+          const uptakeG = vMaxG * (localG / (km + localG));
+          const uptakeO2 = vMaxO2 * (localO2 / (km + localO2));
+
+          this.nutrientField[vIdx] = Math.max(0, localG - uptakeG);
+          this.oxygenField[vIdx] = Math.max(0, localO2 - uptakeO2);
+
+          // Update Cellular ATP Energy Reserve
+          const metabolicYield = (uptakeG / vMaxG) * 0.55 + (uptakeO2 / vMaxO2) * 0.45;
+          cell.energy = Math.max(0, Math.min(1.0, cell.energy * 0.92 + metabolicYield * 0.11));
+
+          // Compute Stochastic Death Probability (Hypoxia + Starvation + Stress + Drug)
+          const hypoxiaFactor = localO2 < 0.24 ? (0.24 - localO2) * 0.48 : 0;
+          const starvationFactor = localG < 0.20 ? (0.20 - localG) * 0.42 : 0;
+          const stressFactor = localStress * (isCancer ? 0.035 : 0.045);
+          // Cytotoxic agent preferentially targets rapidly dividing cancer cells
+          const drugFactor = localDrug * (isCancer ? 0.14 : 0.022);
+          const baseDeath = isCancer ? 0.0015 : 0.0020;
+
+          cell.pDeath = Math.min(0.85, baseDeath + hypoxiaFactor + starvationFactor + stressFactor + drugFactor);
+
+          if (Math.random() < cell.pDeath) {
+            cell.type = 'dead';
+            cell.status = localO2 < 0.24 ? 'HYPOXIC NECROSIS' : (localDrug > 0.2 ? 'DRUG APOPTOSIS' : 'STRESS APOPTOSIS');
+            deathsThisStep++;
+            newCells.push(cell);
+            continue;
+          }
+
+          // Compute Stochastic Mitotic Division Probability
+          const maxCrowding = isCancer ? 18 : 6;
+          const contactFactor = Math.max(0, 1.0 - neighborCounts[i] / maxCrowding);
+          const nutrientFactor = Math.max(0, (localG - 0.18) / 0.82);
+          const oxygenFactor = Math.max(0, (localO2 - 0.18) / 0.82);
+          const maturityReady = cell.age >= (isCancer ? 10 : 22) && cell.energy > 0.45;
+
+          const baseRate = isCancer ? 0.072 : 0.014;
+          cell.pDiv = maturityReady
+            ? Math.min(0.45, baseRate * nutrientFactor * oxygenFactor * contactFactor)
+            : 0;
+
+          if (cell.pDiv > 0.025) {
+            cell.status = 'PROLIFERATING';
+          } else if (localO2 < 0.30 || localG < 0.28) {
+            cell.status = 'HYPOXIC QUIESCENT';
+          } else {
+            cell.status = 'HOMEOSTATIC';
+          }
+
+          // Stochastic Mitosis Event
+          if (maturityReady && (this.cells.length + newCells.length) < this.maxCells && Math.random() < cell.pDiv) {
+            cell.divisions += 1;
+            cell.energy *= 0.54;
+            cell.age = 0;
+            divisionsThisStep++;
+
+            // Spawn daughter cell in adjacent 3D space
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const offset = this.cellRadius * 1.45;
+            const dx = Math.sin(phi) * Math.cos(theta) * offset;
+            const dy = Math.sin(phi) * Math.sin(theta) * offset;
+            const dz = Math.cos(phi) * offset;
+
+            const daughter = this.createCell(
+              cell.type,
+              Math.max(-13.8, Math.min(13.8, cell.x + dx)),
+              Math.max(-13.8, Math.min(13.8, cell.y + dy)),
+              Math.max(-13.8, Math.min(13.8, cell.z + dz)),
+              0
+            );
+            daughter.energy = cell.energy;
+            newCells.push(daughter);
+          }
+
+          // Motility: Slight random walk + cancer invasive motility
+          const motility = isCancer ? 0.055 : 0.015;
+          cell.vx += (Math.random() - 0.5) * motility;
+          cell.vy += (Math.random() - 0.5) * motility;
+          cell.vz += (Math.random() - 0.5) * motility;
+
+          cell.x = Math.max(-14.0, Math.min(14.0, cell.x + cell.vx));
+          cell.y = Math.max(-14.0, Math.min(14.0, cell.y + cell.vy));
+          cell.z = Math.max(-14.0, Math.min(14.0, cell.z + cell.vz));
+
+          // Damping
+          cell.vx *= 0.45;
+          cell.vy *= 0.45;
+          cell.vz *= 0.45;
+
+          newCells.push(cell);
+        }
+
+        this.cells = newCells;
+        this.lastNetGrowthRate = divisionsThisStep - deathsThisStep;
+        this.recordMetricsAndSnapshot();
+      }
+
+      getSummaryStats() {
+        let cancerCount = 0;
+        let healthyCount = 0;
+        let deadCount = 0;
+
+        for (const c of this.cells) {
+          if (c.type === 'cancer') cancerCount++;
+          else if (c.type === 'healthy') healthyCount++;
+          else deadCount++;
+        }
+
+        let sumG = 0;
+        let sumO2 = 0;
+        for (let i = 0; i < this.totalVoxels; i++) {
+          sumG += this.nutrientField[i];
+          sumO2 += this.oxygenField[i];
+        }
+        const meanNutrient = sumG / this.totalVoxels;
+        const meanOxygen = sumO2 / this.totalVoxels;
+
+        // Single cell volume ~ 4.18e-6 mm^3 (scaled for educational 3D spheroid metrics)
+        const tumorVolumeMm3 = +(cancerCount * 0.0042).toFixed(3);
+        const totalAlive = Math.max(1, cancerCount + healthyCount);
+        const occupancyPct = +((cancerCount / totalAlive) * 100).toFixed(1);
+
+        return {
+          timeHours: this.timeHours,
+          cancerCount,
+          healthyCount,
+          deadCount,
+          tumorVolumeMm3,
+          occupancyPct,
+          meanNutrient: +meanNutrient.toFixed(3),
+          meanOxygen: +meanOxygen.toFixed(3),
+          netGrowthRate: this.lastNetGrowthRate
+        };
+      }
+
+      recordMetricsAndSnapshot() {
+        const stats = this.getSummaryStats();
+        this.history.push(stats);
+
+        // Save 4D spatial snapshot for timeline scrubbing
+        const clonedCells = this.cells.map(c => ({ ...c }));
+        this.snapshots.push({
+          timeHours: this.timeHours,
+          cells: clonedCells,
+          stats
+        });
+
+        if (this.snapshots.length > this.maxSnapshots) {
+          this.snapshots.shift();
+        }
+      }
+
+      restoreSnapshot(index) {
+        if (index < 0 || index >= this.snapshots.length) return;
+        const snap = this.snapshots[index];
+        this.timeHours = snap.timeHours;
+        this.cells = snap.cells.map(c => ({ ...c }));
+      }
+    }
+
+    /**
+     * =========================================================================
+     * MODULE 2: THREE.JS 3D BIOLOGICAL LABORATORY RENDERER
+     * =========================================================================
+     */
+    class CancerLabRenderer {
+      constructor(containerEl, engine) {
+        this.container = containerEl;
+        this.engine = engine;
+        this.visMode = 'cellular'; // 'cellular' | 'tumor' | 'nutrient' | 'oxygen' | 'effects' | 'cross_section'
+        this.sliceZ = 0.0;
+        this.selectedCellId = null;
+
+        this.initScene();
+        this.initInstancedMeshes();
+        this.initVoxelFieldMeshes();
+        this.initReticle();
+        this.bindEvents();
+      }
+
+      initScene() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x04070f);
+        this.scene.fog = new THREE.FogExp2(0x04070f, 0.014);
+
+        const w = this.container.clientWidth || window.innerWidth;
+        const h = this.container.clientHeight || window.innerHeight;
+
+        this.camera = new THREE.PerspectiveCamera(46, w / h, 0.1, 250);
+        this.camera.position.set(22, 16, 26);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        this.renderer.setSize(w, h);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.15;
+        this.container.appendChild(this.renderer.domElement);
+
+        // OrbitControls
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.dampingFactor = 0.06;
+        this.controls.minDistance = 6;
+        this.controls.maxDistance = 68;
+
+        // Scientific Microscopy Three-Point & Volumetric Rim Lighting
+        const ambientLight = new THREE.AmbientLight(0x1e293b, 1.35);
+        this.scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xe0f2fe, 1.4);
+        keyLight.position.set(20, 28, 22);
+        this.scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.85);
+        rimLight.position.set(-22, -14, -20);
+        this.scene.add(rimLight);
+
+        // Core Tumor Glow PointLight
+        this.tumorCoreLight = new THREE.PointLight(0xff2a55, 1.6, 24);
+        this.tumorCoreLight.position.set(0, 0, 0);
+        this.scene.add(this.tumorCoreLight);
+
+        // 3D Tissue Containment Chamber Wireframe & Microscopy Grid
+        const boxGeo = new THREE.BoxGeometry(30, 30, 30);
+        const edges = new THREE.EdgesGeometry(boxGeo);
+        const boxLine = new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.22 })
+        );
+        this.scene.add(boxLine);
+
+        const floorGrid = new THREE.GridHelper(30, 12, 0x1e3a8a, 0x0f172a);
+        floorGrid.position.y = -15;
+        this.scene.add(floorGrid);
+
+        // Cross-section visual slicing frame
+        const slicePlaneGeo = new THREE.PlaneGeometry(30, 30);
+        this.sliceFrame = new THREE.LineSegments(
+          new THREE.EdgesGeometry(slicePlaneGeo),
+          new THREE.LineBasicMaterial({ color: 0xff2a55, transparent: true, opacity: 0.75 })
+        );
+        this.sliceFrame.visible = false;
+        this.scene.add(this.sliceFrame);
+      }
+
+      initInstancedMeshes() {
+        const maxInstances = this.engine.maxCells;
+
+        // 1. Healthy Cells (Soft Emerald/Cyan Organic Membrane)
+        const healthyGeo = new THREE.IcosahedronGeometry(0.70, 2);
+        this.healthyMat = new THREE.MeshPhysicalMaterial({
+          color: 0x10b981,
+          emissive: 0x064e3b,
+          emissiveIntensity: 0.35,
+          roughness: 0.32,
+          metalness: 0.05,
+          clearcoat: 0.75,
+          clearcoatRoughness: 0.25,
+          transparent: true,
+          opacity: 0.82
+        });
+        this.healthyInstanced = new THREE.InstancedMesh(healthyGeo, this.healthyMat, maxInstances);
+        this.healthyInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(this.healthyInstanced);
+
+        // 2. Cancer Cells (Irregular Organic Geometry with Glowing Crimson Subsurface)
+        const cancerGeo = new THREE.DodecahedronGeometry(0.78, 2);
+        // Perturb vertices slightly for irregular malignant morphology
+        const posAttr = cancerGeo.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+          const vx = posAttr.getX(i);
+          const vy = posAttr.getY(i);
+          const vz = posAttr.getZ(i);
+          const noise = 1.0 + 0.14 * Math.sin(vx * 5.0 + vy * 3.0) * Math.cos(vz * 4.0);
+          posAttr.setXYZ(i, vx * noise, vy * noise, vz * noise);
+        }
+        cancerGeo.computeVertexNormals();
+
+        this.cancerMat = new THREE.MeshPhysicalMaterial({
+          color: 0xff2a55,
+          emissive: 0xd90429,
+          emissiveIntensity: 0.75,
+          roughness: 0.25,
+          metalness: 0.1,
+          clearcoat: 0.9,
+          clearcoatRoughness: 0.15,
+          transparent: true,
+          opacity: 0.96
+        });
+        this.cancerInstanced = new THREE.InstancedMesh(cancerGeo, this.cancerMat, maxInstances);
+        this.cancerInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(this.cancerInstanced);
+
+        // 3. Dead / Necrotic Cells (Muted Gray-Violet Shrunken Morphology)
+        const deadGeo = new THREE.IcosahedronGeometry(0.54, 1);
+        this.deadMat = new THREE.MeshStandardMaterial({
+          color: 0x5b4b7a,
+          emissive: 0x1e1b2e,
+          roughness: 0.85,
+          transparent: true,
+          opacity: 0.72
+        });
+        this.deadInstanced = new THREE.InstancedMesh(deadGeo, this.deadMat, maxInstances);
+        this.deadInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(this.deadInstanced);
+
+        // 4. Ambient Diffusing Nutrient Molecules (Golden Particles) & Oxygen (Cyan Particles)
+        this.particleCount = 260;
+        const pGeo = new THREE.SphereGeometry(0.14, 8, 8);
+        this.nutrientParticleMat = new THREE.MeshBasicMaterial({
+          color: 0xfbbf24,
+          transparent: true,
+          opacity: 0.75
+        });
+        this.oxygenParticleMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.70
+        });
+
+        this.nutrientParticles = new THREE.InstancedMesh(pGeo, this.nutrientParticleMat, this.particleCount);
+        this.oxygenParticles = new THREE.InstancedMesh(pGeo, this.oxygenParticleMat, this.particleCount);
+        this.scene.add(this.nutrientParticles);
+        this.scene.add(this.oxygenParticles);
+
+        // Seed particle anchor coordinates
+        this.particleSeeds = Array.from({ length: this.particleCount }, () => ({
+          x: (Math.random() * 2 - 1) * 14.2,
+          y: (Math.random() * 2 - 1) * 14.2,
+          z: (Math.random() * 2 - 1) * 14.2,
+          phase: Math.random() * Math.PI * 2
+        }));
+
+        // Instance-to-Cell index maps for Raycasting
+        this.healthyIndexMap = [];
+        this.cancerIndexMap = [];
+        this.deadIndexMap = [];
+      }
+
+      // 3D Voxel Heatmap Cloud for Modes 3, 4, and 5 (Nutrient, Oxygen, Environmental Effects)
+      initVoxelFieldMeshes() {
+        const N = this.engine.gridSize;
+        const total = this.engine.totalVoxels;
+        const voxelGeo = new THREE.BoxGeometry(1.75, 1.75, 1.75);
+        this.voxelMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.24,
+          depthWrite: false
+        });
+        this.voxelInstanced = new THREE.InstancedMesh(voxelGeo, this.voxelMat, total);
+        this.voxelInstanced.visible = false;
+
+        const dummy = new THREE.Object3D();
+        const step = (2 * this.engine.domainHalf) / N;
+        let idx = 0;
+        for (let iz = 0; iz < N; iz++) {
+          for (let iy = 0; iy < N; iy++) {
+            for (let ix = 0; ix < N; ix++) {
+              dummy.position.set(
+                -this.engine.domainHalf + (ix + 0.5) * step,
+                -this.engine.domainHalf + (iy + 0.5) * step,
+                -this.engine.domainHalf + (iz + 0.5) * step
+              );
+              dummy.updateMatrix();
+              this.voxelInstanced.setMatrixAt(idx, dummy.matrix);
+              this.voxelInstanced.setColorAt(idx, new THREE.Color(0x38bdf8));
+              idx++;
+            }
+          }
+        }
+        this.voxelInstanced.instanceMatrix.needsUpdate = true;
+        this.scene.add(this.voxelInstanced);
+      }
+
+      initReticle() {
+        const ringGeo = new THREE.RingGeometry(0.95, 1.15, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.92
+        });
+        this.reticle = new THREE.Mesh(ringGeo, ringMat);
+        this.reticle.visible = false;
+        this.scene.add(this.reticle);
+      }
+
+      setVisualizationMode(mode) {
+        this.visMode = mode;
+        this.sliceFrame.visible = (mode === 'cross_section');
+        this.voxelInstanced.visible = (mode === 'nutrient' || mode === 'oxygen' || mode === 'effects');
+
+        // Adjust material opacities depending on active scientific visualization mode
+        if (mode === 'tumor') {
+          this.healthyMat.opacity = 0.14;
+          this.cancerMat.opacity = 1.0;
+          this.cancerMat.emissiveIntensity = 1.05;
+        } else if (mode === 'nutrient' || mode === 'oxygen' || mode === 'effects') {
+          this.healthyMat.opacity = 0.22;
+          this.cancerMat.opacity = 0.45;
+          this.cancerMat.emissiveIntensity = 0.4;
+        } else {
+          this.healthyMat.opacity = 0.82;
+          this.cancerMat.opacity = 0.96;
+          this.cancerMat.emissiveIntensity = 0.75;
+        }
+      }
+
+      syncFromEngine(elapsedSec = 0) {
+        const dummy = new THREE.Object3D();
+        let hCount = 0;
+        let cCount = 0;
+        let dCount = 0;
+
+        this.healthyIndexMap = [];
+        this.cancerIndexMap = [];
+        this.deadIndexMap = [];
+
+        let selectedCellObj = null;
+
+        for (const cell of this.engine.cells) {
+          if (cell.id === this.selectedCellId) {
+            selectedCellObj = cell;
+          }
+
+          // Cross-section Z-axis slicing filter
+          if (this.visMode === 'cross_section' && cell.z > this.sliceZ) {
+            continue;
+          }
+
+          // Subtle organic breathing pulse + mitotic swelling prior to division
+          const pulse = 1.0 + 0.05 * Math.sin(elapsedSec * 3.0 + cell.id) + (cell.pDiv > 0.03 ? 0.12 : 0);
+          dummy.position.set(cell.x, cell.y, cell.z);
+          dummy.rotation.set(cell.id * 0.4, elapsedSec * 0.25 + cell.id, 0);
+          dummy.scale.setScalar(pulse);
+          dummy.updateMatrix();
+
+          if (cell.type === 'healthy') {
+            this.healthyInstanced.setMatrixAt(hCount, dummy.matrix);
+            this.healthyIndexMap[hCount] = cell;
+            hCount++;
+          } else if (cell.type === 'cancer') {
+            this.cancerInstanced.setMatrixAt(cCount, dummy.matrix);
+            this.cancerIndexMap[cCount] = cell;
+            cCount++;
+          } else {
+            this.deadInstanced.setMatrixAt(dCount, dummy.matrix);
+            this.deadIndexMap[dCount] = cell;
+            dCount++;
+          }
+        }
+
+        this.healthyInstanced.count = hCount;
+        this.cancerInstanced.count = cCount;
+        this.deadInstanced.count = dCount;
+
+        this.healthyInstanced.instanceMatrix.needsUpdate = true;
+        this.cancerInstanced.instanceMatrix.needsUpdate = true;
+        this.deadInstanced.instanceMatrix.needsUpdate = true;
+
+        // Update 3D Voxel Heatmap Colors if in Field Mode
+        if (this.voxelInstanced.visible) {
+          const color = new THREE.Color();
+          for (let i = 0; i < this.engine.totalVoxels; i++) {
+            if (this.visMode === 'nutrient') {
+              const val = Math.min(1, this.engine.nutrientField[i]);
+              color.setHSL(0.11, 0.95, 0.08 + val * 0.52); // Deep amber to bright gold
+            } else if (this.visMode === 'oxygen') {
+              const val = Math.min(1, this.engine.oxygenField[i]);
+              color.setHSL(0.55, 0.92, 0.08 + val * 0.50); // Deep navy to bright cyan
+            } else if (this.visMode === 'effects') {
+              const stress = Math.min(1, this.engine.stressField[i]);
+              const drug = Math.min(1, this.engine.drugField[i]);
+              if (drug > stress) {
+                color.setHSL(0.94, 0.90, 0.10 + drug * 0.48); // Crimson cytotoxic field
+              } else {
+                color.setHSL(0.77, 0.85, 0.08 + stress * 0.45); // Violet stress field
+              }
+            }
+            this.voxelInstanced.setColorAt(i, color);
+          }
+          if (this.voxelInstanced.instanceColor) {
+            this.voxelInstanced.instanceColor.needsUpdate = true;
+          }
+        }
+
+        // Update Ambient Glucose & Oxygen Particles based on local voxel concentration
+        const showNutrients = (this.visMode === 'cellular' || this.visMode === 'nutrient');
+        const showOxygen = (this.visMode === 'cellular' || this.visMode === 'oxygen');
+        this.nutrientParticles.visible = showNutrients;
+        this.oxygenParticles.visible = showOxygen;
+
+        for (let i = 0; i < this.particleCount; i++) {
+          const seed = this.particleSeeds[i];
+          const px = seed.x + Math.sin(elapsedSec * 0.7 + seed.phase) * 0.45;
+          const py = seed.y + Math.cos(elapsedSec * 0.6 + seed.phase) * 0.45;
+          const pz = seed.z + Math.sin(elapsedSec * 0.5 + seed.phase * 1.3) * 0.45;
+          const vIdx = this.engine.coordToVoxelIndex(px, py, pz);
+
+          // Nutrient particle scale reflects local glucose concentration
+          const gScale = Math.max(0.01, Math.min(1.4, this.engine.nutrientField[vIdx] * 1.25));
+          dummy.position.set(px, py, pz);
+          dummy.scale.setScalar(gScale);
+          dummy.updateMatrix();
+          this.nutrientParticles.setMatrixAt(i, dummy.matrix);
+
+          // Oxygen particle scale reflects local pO2
+          const oScale = Math.max(0.01, Math.min(1.4, this.engine.oxygenField[vIdx] * 1.2));
+          dummy.position.set(-px, py * 0.95, -pz);
+          dummy.scale.setScalar(oScale);
+          dummy.updateMatrix();
+          this.oxygenParticles.setMatrixAt(i, dummy.matrix);
+        }
+        this.nutrientParticles.instanceMatrix.needsUpdate = true;
+        this.oxygenParticles.instanceMatrix.needsUpdate = true;
+
+        // Update Cross-section frame Z
+        if (this.sliceFrame.visible) {
+          this.sliceFrame.position.z = this.sliceZ;
+        }
+
+        // Update Cell Selection Targeting Reticle
+        if (selectedCellObj) {
+          this.reticle.visible = true;
+          this.reticle.position.set(selectedCellObj.x, selectedCellObj.y, selectedCellObj.z);
+          this.reticle.lookAt(this.camera.position);
+          this.reticle.rotation.z = elapsedSec * 1.5;
+        } else {
+          this.reticle.visible = false;
+        }
+
+        return selectedCellObj;
+      }
+
+      bindEvents() {
+        window.addEventListener('resize', () => {
+          if (!this.container.clientWidth || !this.container.clientHeight) return;
+          this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+          this.camera.updateProjectionMatrix();
+          this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+        });
+
+        // Raycasting click-to-select cell
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let downPos = { x: 0, y: 0 };
+
+        this.renderer.domElement.addEventListener('pointerdown', (e) => {
+          downPos = { x: e.clientX, y: e.clientY };
+        });
+
+        this.renderer.domElement.addEventListener('pointerup', (e) => {
+          const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+          if (dist > 5) return; // Ignore camera orbit drags
+
+          const rect = this.renderer.domElement.getBoundingClientRect();
+          mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+          raycaster.setFromCamera(mouse, this.camera);
+
+          // Check Cancer, Healthy, and Dead InstancedMeshes
+          const targets = [
+            { mesh: this.cancerInstanced, map: this.cancerIndexMap },
+            { mesh: this.healthyInstanced, map: this.healthyIndexMap },
+            { mesh: this.deadInstanced, map: this.deadIndexMap }
+          ];
+
+          let closestHit = null;
+          let hitCell = null;
+
+          for (const t of targets) {
+            const intersects = raycaster.intersectObject(t.mesh);
+            if (intersects.length > 0) {
+              const hit = intersects[0];
+              if (!closestHit || hit.distance < closestHit.distance) {
+                closestHit = hit;
+                hitCell = t.map[hit.instanceId];
+              }
+            }
+          }
+
+          if (hitCell) {
+            this.selectedCellId = hitCell.id;
+            if (this.onCellSelected) this.onCellSelected(hitCell);
+          }
+        });
+      }
+
+      render() {
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+      }
+    }
+
+    /**
+     * =========================================================================
+     * MODULE 3: APPLICATION CONTROLLER, CHARTS & EXPERIMENT MANAGER
+     * =========================================================================
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      const engine = new CancerSimulationEngine();
+      const viewportEl = document.getElementById('three-container');
+      const labRenderer = new CancerLabRenderer(viewportEl, engine);
+
+      let isRunning = true;
+      let simSpeed = 4; // simulated hours per real second
+      let accumulator = 0;
+      let lastFrameTime = performance.now();
+      let savedExperiments = [];
+      let charts = {};
+
+      // Toast helper
+      const toastBanner = document.getElementById('toast-banner');
+      const toastText = document.getElementById('toast-text');
+      let toastTimeout = null;
+      function showToast(msg) {
+        toastText.textContent = msg;
+        toastBanner.classList.remove('opacity-0', '-translate-y-2');
+        toastBanner.classList.add('opacity-100', 'translate-y-0');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+          toastBanner.classList.add('opacity-0', '-translate-y-2');
+          toastBanner.classList.remove('opacity-100', 'translate-y-0');
+        }, 2800);
+      }
+
+      // Format 4D Simulation Clock
+      function formatSimClock(hours) {
+        const weeks = Math.floor(hours / 168);
+        const days = Math.floor((hours % 168) / 24);
+        const remHours = hours % 24;
+        const hh = String(remHours).padStart(2, '0');
+        return `Week ${weeks} · Day ${days} · ${hh}:00 (t = ${hours}h)`;
+      }
+
+      // Update Cell Inspector UI
+      function updateCellInspector(cell) {
+        const emptyEl = document.getElementById('inspector-empty');
+        const activeEl = document.getElementById('inspector-active');
+
+        if (!cell) {
+          emptyEl.classList.remove('hidden');
+          activeEl.classList.add('hidden');
+          return;
+        }
+
+        emptyEl.classList.add('hidden');
+        activeEl.classList.remove('hidden');
+
+        document.getElementById('insp-id').textContent = `CELL-${String(cell.id).padStart(4, '0')}`;
+        const badge = document.getElementById('insp-type-badge');
+        if (cell.type === 'cancer') {
+          badge.textContent = 'CANCER CELL';
+          badge.className = 'px-2.5 py-1 rounded-md text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40';
+        } else if (cell.type === 'healthy') {
+          badge.textContent = 'HEALTHY CELL';
+          badge.className = 'px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        } else {
+          badge.textContent = 'DEAD / NECROTIC';
+          badge.className = 'px-2.5 py-1 rounded-md text-[11px] font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/40';
+        }
+
+        document.getElementById('insp-pos').textContent = `${cell.x.toFixed(1)}, ${cell.y.toFixed(1)}, ${cell.z.toFixed(1)}`;
+        document.getElementById('insp-age').textContent = `${cell.age}h · ${cell.divisions} div`;
+        document.getElementById('insp-status').textContent = cell.status;
+
+        document.getElementById('insp-nutrient').textContent = `${cell.localNutrient.toFixed(2)} mM`;
+        document.getElementById('insp-nutrient-bar').style.width = `${Math.min(100, cell.localNutrient * 100)}%`;
+
+        document.getElementById('insp-oxygen').textContent = `${cell.localOxygen.toFixed(2)} pO₂`;
+        document.getElementById('insp-oxygen-bar').style.width = `${Math.min(100, cell.localOxygen * 100)}%`;
+
+        document.getElementById('insp-pdiv').textContent = `${(cell.pDiv * 100).toFixed(2)}%`;
+        document.getElementById('insp-pdeath').textContent = `${(cell.pDeath * 100).toFixed(2)}%`;
+        document.getElementById('insp-energy').textContent = `${Math.round(cell.energy * 100)}%`;
+
+        const noteEl = document.getElementById('insp-mechanistic-note');
+        if (cell.type === 'dead') {
+          noteEl.textContent = `Cell underwent ${cell.status.toLowerCase()} due to local metabolic or therapeutic stress.`;
+        } else if (cell.type === 'cancer') {
+          noteEl.textContent = cell.localOxygen < 0.30
+            ? 'Hypoxic core micro-niche suppresses mitosis and elevates necrosis risk.'
+            : 'Warburg glycolytic uptake and muted contact inhibition drive clonal tumor expansion.';
+        } else {
+          noteEl.textContent = 'Normal stromal parenchymal cell regulated by strict contact inhibition.';
+        }
+      }
+
+      labRenderer.onCellSelected = (cell) => {
+        updateCellInspector(cell);
+        showToast(`Locked onto CELL-${String(cell.id).padStart(4, '0')} (${cell.type.toUpperCase()})`);
+      };
+
+      // Update All Live HUD Telemetry & Timeline Controls
+      function syncHUD() {
+        const stats = engine.getSummaryStats();
+
+        document.getElementById('stat-cancer').textContent = stats.cancerCount;
+        document.getElementById('stat-healthy').textContent = stats.healthyCount;
+        document.getElementById('stat-dead').textContent = stats.deadCount;
+        document.getElementById('stat-volume').textContent = `${stats.tumorVolumeMm3.toFixed(3)} mm³`;
+        document.getElementById('stat-occupancy').textContent = `${stats.occupancyPct}%`;
+        const sign = stats.netGrowthRate >= 0 ? '+' : '';
+        document.getElementById('stat-growth-rate').textContent = `${sign}${stats.netGrowthRate} cells/h`;
+        document.getElementById('stat-env-means').textContent = `${stats.meanNutrient.toFixed(2)} / ${stats.meanOxygen.toFixed(2)}`;
+
+        // 4D Clock & Scrubber
+        document.getElementById('sim-clock-display').textContent = formatSimClock(engine.timeHours);
+        const scrubber = document.getElementById('timeline-scrubber');
+        const maxIdx = Math.max(0, engine.snapshots.length - 1);
+        scrubber.max = maxIdx;
+        // Find matching snapshot index
+        const currentIdx = engine.snapshots.findIndex(s => s.timeHours === engine.timeHours);
+        if (currentIdx !== -1) scrubber.value = currentIdx;
+        document.getElementById('timeline-range-label').textContent = `4D Buffer: ${engine.snapshots.length} states`;
+
+        // Update Analytics KPIs if visible
+        document.getElementById('kpi-cancer').textContent = stats.cancerCount;
+        document.getElementById('kpi-healthy').textContent = stats.healthyCount;
+        document.getElementById('kpi-volume').textContent = `${stats.tumorVolumeMm3.toFixed(3)} mm³`;
+        document.getElementById('kpi-occupancy').textContent = `${stats.occupancyPct}% tissue occupancy`;
+        document.getElementById('kpi-dead').textContent = stats.deadCount;
+        document.getElementById('kpi-env').textContent = `Mean Gluc: ${stats.meanNutrient.toFixed(2)} | O₂: ${stats.meanOxygen.toFixed(2)}`;
+      }
+
+      // Initialize Chart.js Instances
+      function initCharts() {
+        const commonOptions = {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { labels: { color: '#cbd5e1', font: { family: 'Inter', size: 11 } } }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#64748b', maxTicksLimit: 10, font: { family: 'JetBrains Mono', size: 10 } },
+              grid: { color: 'rgba(148, 163, 184, 0.08)' }
+            },
+            y: {
+              ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } },
+              grid: { color: 'rgba(148, 163, 184, 0.08)' }
+            }
+          }
+        };
+
+        charts.populations = new Chart(document.getElementById('chart-populations'), {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              { label: 'Cancer Cells', data: [], borderColor: '#ff2a55', backgroundColor: 'rgba(255,42,85,0.12)', tension: 0.25, fill: true, pointRadius: 0 },
+              { label: 'Healthy Cells', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', tension: 0.25, fill: false, pointRadius: 0 },
+              { label: 'Dead / Necrotic', data: [], borderColor: '#a78bfa', borderDash: [4, 4], tension: 0.25, fill: false, pointRadius: 0 }
+            ]
+          },
+          options: commonOptions
+        });
+
+        charts.volume = new Chart(document.getElementById('chart-volume'), {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              { label: 'Tumor Volume (mm³)', data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.15)', tension: 0.3, fill: true, pointRadius: 0 }
+            ]
+          },
+          options: commonOptions
+        });
+
+        charts.environment = new Chart(document.getElementById('chart-environment'), {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              { label: 'Mean Glucose (mM)', data: [], borderColor: '#f59e0b', tension: 0.25, pointRadius: 0 },
+              { label: 'Mean Oxygen (pO₂)', data: [], borderColor: '#38bdf8', tension: 0.25, pointRadius: 0 }
+            ]
+          },
+          options: commonOptions
+        });
+
+        charts.growthrate = new Chart(document.getElementById('chart-growthrate'), {
+          type: 'bar',
+          data: {
+            labels: [],
+            datasets: [
+              { label: 'Net Proliferation (cells/hr)', data: [], backgroundColor: 'rgba(52, 211, 153, 0.65)', borderRadius: 3 }
+            ]
+          },
+          options: commonOptions
+        });
+
+        charts.comparison = new Chart(document.getElementById('chart-comparison'), {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              { label: 'Run A — Cancer Cells', data: [], borderColor: '#ff2a55', tension: 0.25, pointRadius: 0 },
+              { label: 'Run B — Cancer Cells', data: [], borderColor: '#38bdf8', borderDash: [5, 3], tension: 0.25, pointRadius: 0 }
+            ]
+          },
+          options: commonOptions
+        });
+      }
+
+      function updateAnalyticsCharts() {
+        if (!charts.populations) return;
+        const hist = engine.history;
+        const labels = hist.map(h => `${h.timeHours}h`);
+
+        charts.populations.data.labels = labels;
+        charts.populations.data.datasets[0].data = hist.map(h => h.cancerCount);
+        charts.populations.data.datasets[1].data = hist.map(h => h.healthyCount);
+        charts.populations.data.datasets[2].data = hist.map(h => h.deadCount);
+        charts.populations.update();
+
+        charts.volume.data.labels = labels;
+        charts.volume.data.datasets[0].data = hist.map(h => h.tumorVolumeMm3);
+        charts.volume.update();
+
+        charts.environment.data.labels = labels;
+        charts.environment.data.datasets[0].data = hist.map(h => h.meanNutrient);
+        charts.environment.data.datasets[1].data = hist.map(h => h.meanOxygen);
+        charts.environment.update();
+
+        const recentHist = hist.slice(-48);
+        charts.growthrate.data.labels = recentHist.map(h => `${h.timeHours}h`);
+        charts.growthrate.data.datasets[0].data = recentHist.map(h => h.netGrowthRate);
+        charts.growthrate.update();
+      }
+
+      // Experiment Lab Management
+      function saveExperimentRun(customName = null) {
+        const stats = engine.getSummaryStats();
+        const scenarioLabel = document.getElementById('scenario-select').selectedOptions[0].text.split('.')[1]?.trim() || 'Custom Run';
+        const name = customName || document.getElementById('experiment-name-input').value.trim() || `${scenarioLabel} (${engine.timeHours}h)`;
+
+        const record = {
+          id: Date.now(),
+          name,
+          durationHours: engine.timeHours,
+          params: { ...engine.params },
+          finalStats: { ...stats },
+          history: engine.history.map(h => ({ ...h }))
+        };
+
+        savedExperiments.unshift(record);
+        document.getElementById('experiment-name-input').value = '';
+        renderExperimentsUI();
+        showToast(`Saved "${name}" to Experiment Lab`);
+      }
+
+      function renderExperimentsUI() {
+        const tbody = document.getElementById('experiments-table-body');
+        const selA = document.getElementById('compare-run-a');
+        const selB = document.getElementById('compare-run-b');
+
+        tbody.innerHTML = '';
+        selA.innerHTML = '';
+        selB.innerHTML = '';
+
+        savedExperiments.forEach((exp, idx) => {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-900/50 transition-colors';
+          tr.innerHTML = `
+            <td class="py-2.5 px-3 font-medium text-white">${exp.name}</td>
+            <td class="py-2.5 px-3 font-mono text-sky-300">${exp.durationHours}h (${(exp.durationHours/24).toFixed(1)}d)</td>
+            <td class="py-2.5 px-3 font-mono text-slate-300">G:${exp.params.nutrientSupply.toFixed(2)} | O₂:${exp.params.oxygenSupply.toFixed(2)} | S:${exp.params.environmentalStress.toFixed(2)} | D:${exp.params.treatmentDose.toFixed(2)}</td>
+            <td class="py-2.5 px-3 font-mono text-rose-400 font-semibold">${exp.finalStats.cancerCount}</td>
+            <td class="py-2.5 px-3 font-mono text-emerald-400">${exp.finalStats.healthyCount}</td>
+            <td class="py-2.5 px-3 font-mono text-slate-200">${exp.finalStats.tumorVolumeMm3.toFixed(3)} mm³</td>
+            <td class="py-2.5 px-3 text-right">
+              <button data-csv-idx="${idx}" class="btn-exp-csv px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-500/20 border border-slate-700 text-sky-300 font-mono text-[11px]">CSV</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+
+          const optA = new Option(exp.name, idx);
+          const optB = new Option(exp.name, idx);
+          selA.add(optA);
+          selB.add(optB);
+        });
+
+        if (savedExperiments.length > 1) {
+          selB.selectedIndex = 1;
+        }
+
+        document.querySelectorAll('.btn-exp-csv').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const idx = Number(e.target.getAttribute('data-csv-idx'));
+            exportHistoryToCSV(savedExperiments[idx].history, savedExperiments[idx].name);
+          });
+        });
+
+        updateComparisonChart();
+      }
+
+      function updateComparisonChart() {
+        if (!charts.comparison || savedExperiments.length === 0) return;
+        const idxA = Number(document.getElementById('compare-run-a').value || 0);
+        const idxB = Number(document.getElementById('compare-run-b').value || 0);
+        const runA = savedExperiments[idxA];
+        const runB = savedExperiments[idxB] || runA;
+
+        const maxLen = Math.max(runA.history.length, runB.history.length);
+        const labels = Array.from({ length: maxLen }, (_, i) => `${i}h`);
+
+        charts.comparison.data.labels = labels;
+        charts.comparison.data.datasets[0].label = `${runA.name} (Cancer)`;
+        charts.comparison.data.datasets[0].data = runA.history.map(h => h.cancerCount);
+        charts.comparison.data.datasets[1].label = `${runB.name} (Cancer)`;
+        charts.comparison.data.datasets[1].data = runB.history.map(h => h.cancerCount);
+        charts.comparison.update();
+
+        const box = document.getElementById('comparison-metrics-box');
+        const deltaCancer = runA.finalStats.cancerCount - runB.finalStats.cancerCount;
+        box.innerHTML = `
+          <div>
+            <div class="text-[10px] font-mono text-slate-400 uppercase">Run A Final Tumor Burden</div>
+            <div class="text-base font-bold font-mono text-rose-400">${runA.finalStats.cancerCount} cells (${runA.finalStats.tumorVolumeMm3.toFixed(3)} mm³)</div>
+          </div>
+          <div>
+            <div class="text-[10px] font-mono text-slate-400 uppercase">Run B Final Tumor Burden</div>
+            <div class="text-base font-bold font-mono text-sky-400">${runB.finalStats.cancerCount} cells (${runB.finalStats.tumorVolumeMm3.toFixed(3)} mm³)</div>
+          </div>
+          <div class="pt-2 border-t border-slate-800">
+            <div class="text-[10px] font-mono text-slate-400 uppercase">Differential Burden (A − B)</div>
+            <div class="font-mono font-semibold ${deltaCancer >= 0 ? 'text-amber-300' : 'text-emerald-300'}">
+              ${deltaCancer >= 0 ? '+' : ''}${deltaCancer} malignant cells
+            </div>
+          </div>
+        `;
+      }
+
+      // CSV Export Utility
+      function exportHistoryToCSV(historyArray, filenamePrefix = 'CancerSim_Run') {
+        const headers = ['Time_Hours', 'Cancer_Cells', 'Healthy_Cells', 'Dead_Cells', 'Tumor_Volume_mm3', 'Occupancy_Pct', 'Mean_Glucose', 'Mean_Oxygen', 'Net_Growth_Rate'];
+        const rows = historyArray.map(h => [
+          h.timeHours, h.cancerCount, h.healthyCount, h.deadCount,
+          h.tumorVolumeMm3, h.occupancyPct, h.meanNutrient, h.meanOxygen, h.netGrowthRate
+        ].join(','));
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `${filenamePrefix.replace(/\s+/g, '_')}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Exported simulation telemetry to CSV');
+      }
+
+      // Sync Left Panel Sliders with Engine Parameters
+      function syncParamSlidersFromEngine() {
+        document.getElementById('param-nutrient').value = engine.params.nutrientSupply;
+        document.getElementById('param-nutrient-val').textContent = engine.params.nutrientSupply.toFixed(2);
+        document.getElementById('param-oxygen').value = engine.params.oxygenSupply;
+        document.getElementById('param-oxygen-val').textContent = engine.params.oxygenSupply.toFixed(2);
+        document.getElementById('param-stress').value = engine.params.environmentalStress;
+        document.getElementById('param-stress-val').textContent = engine.params.environmentalStress.toFixed(2);
+        document.getElementById('param-drug').value = engine.params.treatmentDose;
+        document.getElementById('param-drug-val').textContent = engine.params.treatmentDose.toFixed(2);
+      }
+
+      // Play / Pause Toggle Helper
+      function setRunningState(running) {
+        isRunning = running;
+        const badge = document.getElementById('sim-status-badge');
+        const dot = document.getElementById('sim-status-dot');
+        const text = document.getElementById('sim-status-text');
+        const iconPause = document.getElementById('icon-pause');
+        const iconPlay = document.getElementById('icon-play');
+        const btnText = document.getElementById('btn-play-text');
+
+        if (isRunning) {
+          badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+          text.textContent = 'RUNNING';
+          iconPause.classList.remove('hidden');
+          iconPlay.classList.add('hidden');
+          btnText.textContent = 'Pause';
+        } else {
+          badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30';
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+          text.textContent = 'PAUSED';
+          iconPause.classList.add('hidden');
+          iconPlay.classList.remove('hidden');
+          btnText.textContent = 'Resume';
+        }
+      }
+
+      // Bind Navigation Tabs
+      document.querySelectorAll('.nav-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.nav-tab').forEach(b => {
+            b.classList.remove('active', 'bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/40');
+            b.classList.add('text-slate-400');
+          });
+          btn.classList.add('active', 'bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/40');
+          btn.classList.remove('text-slate-400');
+
+          const tab = btn.getAttribute('data-tab');
+          document.getElementById('view-lab').classList.toggle('hidden', tab !== 'lab');
+          document.getElementById('view-analytics').classList.toggle('hidden', tab !== 'analytics');
+          document.getElementById('view-experiments').classList.toggle('hidden', tab !== 'experiments');
+          document.getElementById('view-docs').classList.toggle('hidden', tab !== 'docs');
+
+          if (tab === 'analytics') updateAnalyticsCharts();
+          if (tab === 'experiments') updateComparisonChart();
+        });
+      });
+
+      // Bind Scenario Preset Selector
+      const scenarioDescriptions = {
+        baseline: 'Standard physiological perfusion (Glucose = 0.75, O₂ = 0.80) with 6 initial malignant seed cells in healthy stromal tissue.',
+        hyperglycemia: 'Elevated vascular glucose availability (0.98 mM) accelerating Warburg glycolytic proliferation in the tumor rim.',
+        hypoxic: 'Restricted vascular oxygen tension (0.32 pO₂) inducing early central tumor necrosis and slower proliferation.',
+        high_stress: 'Elevated microenvironmental oxidative/acidic stress (0.58) increasing stochastic apoptosis across both cell populations.',
+        cytotoxic: 'Targeted cytotoxic agent perfusion (0.62 dose) selectively elevating cancer cell apoptosis probability.'
+      };
+
+      document.getElementById('scenario-select').addEventListener('change', (e) => {
+        const val = e.target.value;
+        document.getElementById('scenario-desc').textContent = scenarioDescriptions[val];
+        engine.reset(val);
+        syncParamSlidersFromEngine();
+        syncHUD();
+        updateAnalyticsCharts();
+        showToast(`Loaded Scenario: ${e.target.selectedOptions[0].text}`);
+      });
+
+      // Bind Micro-Pipette Injection Controls
+      document.getElementById('bolus-slider').addEventListener('input', (e) => {
+        document.getElementById('bolus-val').textContent = `+${Number(e.target.value).toFixed(2)} mM`;
+      });
+
+      function handleBolusInjection(type, label) {
+        const locType = document.getElementById('inject-location').value;
+        const dose = Number(document.getElementById('bolus-slider').value);
+        let coords = [0, 0, 0];
+
+        if (locType === 'periphery') {
+          coords = [6, 4, 3];
+        } else if (locType === 'vascular') {
+          coords = [(Math.random() - 0.5) * 18, (Math.random() - 0.5) * 18, (Math.random() - 0.5) * 18];
+        } else if (locType === 'selected' && labRenderer.selectedCellId) {
+          const found = engine.cells.find(c => c.id === labRenderer.selectedCellId);
+          if (found) coords = [found.x, found.y, found.z];
+        }
+
+        engine.injectSubstance(type, coords, dose);
+        showToast(`Injected ${label} (+${dose.toFixed(2)}) at (${coords.map(v => v.toFixed(1)).join(', ')})`);
+      }
+
+      document.getElementById('btn-inject-nutrient').addEventListener('click', () => handleBolusInjection('nutrient', 'Glucose Bolus'));
+      document.getElementById('btn-inject-stress').addEventListener('click', () => handleBolusInjection('stress', 'Oxidative Stress'));
+      document.getElementById('btn-inject-drug').addEventListener('click', () => handleBolusInjection('drug', 'Cytotoxic Agent'));
+
+      // Bind Global Boundary Sliders
+      document.getElementById('param-nutrient').addEventListener('input', (e) => {
+        engine.params.nutrientSupply = Number(e.target.value);
+        document.getElementById('param-nutrient-val').textContent = engine.params.nutrientSupply.toFixed(2);
+      });
+      document.getElementById('param-oxygen').addEventListener('input', (e) => {
+        engine.params.oxygenSupply = Number(e.target.value);
+        document.getElementById('param-oxygen-val').textContent = engine.params.oxygenSupply.toFixed(2);
+      });
+      document.getElementById('param-stress').addEventListener('input', (e) => {
+        engine.params.environmentalStress = Number(e.target.value);
+        document.getElementById('param-stress-val').textContent = engine.params.environmentalStress.toFixed(2);
+      });
+      document.getElementById('param-drug').addEventListener('input', (e) => {
+        engine.params.treatmentDose = Number(e.target.value);
+        document.getElementById('param-drug-val').textContent = engine.params.treatmentDose.toFixed(2);
+      });
+
+      // Bind 6 Visualization Mode Buttons
+      const modeDescriptions = {
+        cellular: 'Cellular View — Click any cell to inspect telemetry',
+        tumor: 'Tumor Growth View — Healthy tissue dimmed to highlight malignant cluster',
+        nutrient: 'Nutrient Field — 3D spatial Glucose concentration heatmap & molecules',
+        oxygen: 'Oxygen Field — 3D spatial pO₂ oxygenation gradient & particles',
+        effects: 'Environmental Effects — Stress & cytotoxic treatment diffusion zones',
+        cross_section: 'Cross-Section View — Internal Z-axis slice exposing tumor core'
+      };
+
+      document.querySelectorAll('.vis-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.vis-btn').forEach(b => {
+            b.classList.remove('active', 'bg-sky-500/25', 'text-sky-200', 'border', 'border-sky-400/40');
+            b.classList.add('text-slate-300');
+          });
+          btn.classList.add('active', 'bg-sky-500/25', 'text-sky-200', 'border', 'border-sky-400/40');
+          btn.classList.remove('text-slate-300');
+
+          const mode = btn.getAttribute('data-vismode');
+          labRenderer.setVisualizationMode(mode);
+          document.getElementById('active-mode-label').textContent = modeDescriptions[mode];
+          document.getElementById('cross-section-bar').classList.toggle('hidden', mode !== 'cross_section');
+        });
+      });
+
+      document.getElementById('slice-z-slider').addEventListener('input', (e) => {
+        labRenderer.sliceZ = Number(e.target.value);
+        const sign = labRenderer.sliceZ >= 0 ? '+' : '';
+        document.getElementById('slice-z-val').textContent = `Z ≤ ${sign}${labRenderer.sliceZ.toFixed(1)} µm`;
+      });
+
+      // Camera Focus Buttons
+      document.getElementById('btn-focus-tumor').addEventListener('click', () => {
+        // Compute centroid of cancer cells
+        const cancerCells = engine.cells.filter(c => c.type === 'cancer');
+        if (cancerCells.length > 0) {
+          let cx = 0, cy = 0, cz = 0;
+          for (const c of cancerCells) { cx += c.x; cy += c.y; cz += c.z; }
+          cx /= cancerCells.length; cy /= cancerCells.length; cz /= cancerCells.length;
+          labRenderer.controls.target.set(cx, cy, cz);
+          labRenderer.camera.position.set(cx + 10, cy + 8, cz + 12);
+          showToast('Camera focused on Tumor Centroid');
+        }
+      });
+
+      document.getElementById('btn-reset-camera').addEventListener('click', () => {
+        labRenderer.controls.target.set(0, 0, 0);
+        labRenderer.camera.position.set(22, 16, 26);
+      });
+
+      // Target Random Cancer Cell Button
+      document.getElementById('btn-select-random-cancer').addEventListener('click', () => {
+        const cancerCells = engine.cells.filter(c => c.type === 'cancer');
+        if (cancerCells.length > 0) {
+          const picked = cancerCells[Math.floor(Math.random() * cancerCells.length)];
+          labRenderer.selectedCellId = picked.id;
+          updateCellInspector(picked);
+          showToast(`Targeted CELL-${String(picked.id).padStart(4, '0')}`);
+        }
+      });
+
+      // Transport Controls: Play/Pause, Step, Reset, Speed, Timeline Scrubber
+      document.getElementById('btn-play-pause').addEventListener('click', () => {
+        setRunningState(!isRunning);
+      });
+
+      document.getElementById('btn-step').addEventListener('click', () => {
+        setRunningState(false);
+        engine.step();
+        syncHUD();
+        updateAnalyticsCharts();
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', () => {
+        const scen = document.getElementById('scenario-select').value;
+        engine.reset(scen);
+        labRenderer.selectedCellId = null;
+        updateCellInspector(null);
+        syncHUD();
+        updateAnalyticsCharts();
+        showToast('Simulation reset to Day 0 · 00:00');
+      });
+
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.speed-btn').forEach(b => {
+            b.classList.remove('active', 'bg-sky-500/25', 'text-sky-300', 'border', 'border-sky-500/40');
+            b.classList.add('text-slate-400');
+          });
+          btn.classList.add('active', 'bg-sky-500/25', 'text-sky-300', 'border', 'border-sky-500/40');
+          btn.classList.remove('text-slate-400');
+          simSpeed = Number(btn.getAttribute('data-speed'));
+        });
+      });
+
+      document.getElementById('timeline-scrubber').addEventListener('input', (e) => {
+        setRunningState(false);
+        const snapIdx = Number(e.target.value);
+        engine.restoreSnapshot(snapIdx);
+        syncHUD();
+      });
+
+      // Save Experiment & CSV Export Buttons
+      document.getElementById('btn-quick-save-run').addEventListener('click', () => saveExperimentRun());
+      document.getElementById('btn-save-experiment').addEventListener('click', () => saveExperimentRun());
+      document.getElementById('compare-run-a').addEventListener('change', updateComparisonChart);
+      document.getElementById('compare-run-b').addEventListener('change', updateComparisonChart);
+      document.getElementById('btn-export-csv-analytics').addEventListener('click', () => {
+        exportHistoryToCSV(engine.history, `CancerSim_${engine.timeHours}h`);
+      });
+
+      // Initialize Charts & Seed One Reference Experiment
+      initCharts();
+      saveExperimentRun('Initial Day-0 Baseline Reference');
+      syncHUD();
+
+      // Main Real-Time Animation & Simulation Loop
+      function animate(now) {
+        requestAnimationFrame(animate);
+
+        const dtSec = Math.min(0.1, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+
+        if (isRunning) {
+          accumulator += dtSec * simSpeed;
+          let stepped = false;
+          while (accumulator >= 1.0) {
+            engine.step();
+            accumulator -= 1.0;
+            stepped = true;
+          }
+          if (stepped) {
+            syncHUD();
+            if (!document.getElementById('view-analytics').classList.contains('hidden')) {
+              updateAnalyticsCharts();
+            }
+          }
+        }
+
+        const activeCell = labRenderer.syncFromEngine(now / 1000);
+        if (labRenderer.selectedCellId !== null) {
+          updateCellInspector(activeCell);
+        }
+        labRenderer.render();
+      }
+
+      requestAnimationFrame(animate);
+    });
+  </script>
+</body>
+</html>
